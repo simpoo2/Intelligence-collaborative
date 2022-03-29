@@ -1,8 +1,51 @@
+from pickletools import read_uint1
 from pyexpat import version_info
 import random
 import statistics
 from turtle import pen
 from ga_process import*
+
+
+class solution():
+    def __init__(self):
+        self.obj=None
+        self.node_id_list = []
+        self.cost_of_distance=None
+        self.cost_of_time=None
+        self.fitness=None
+        self.route_list=[]
+        self.timetable_list=[]
+
+class Node():
+    def __init__(self):
+        self.id=0
+        self.x_coord=0
+        self.y_cooord=0
+        self.demand=0
+        self.depot_capacity=0
+        self.start_time=0
+        self.end_time=1440
+        self.service_time=0
+
+
+class Model():
+    def __init__(self):
+        self.best_solution=None
+        self.demand_dict={}
+        self.depot_dict={}
+        self.depot_id_list=[]
+        self.demand_id_list=[]
+        self.sol_list=[]
+        self.distance_matrix={}
+        self.time_matrix={}
+        self.number_of_demands=0
+        self.vehicle_cap=0
+        self.vehicle_speed=1
+        self.pc=0.5
+        self.pm=0.1
+        self.popsize=100
+        self.n_select=80
+        self.opt_type=1
 
 class Vehicle:
     def __init__(self,id,volume, weight, cost_km):
@@ -46,9 +89,17 @@ class VRP:
 
 class Modele_genetic():
     
-    def __init__(self,chromosome_modele,len_chromosome):
+    def __init__(self,chromosome_modele,len_chromosome,penalty_wrong_chromosome,penalty_car_road,penalty_late,penalty_volumn,penalty_weight,cost_per_car,cost_per_km):
         self.chromosome_modele=chromosome_modele
         self.len_chromosome=len_chromosome
+        self.penalty_wrong_chromosome= penalty_wrong_chromosome
+        self.penalty_car_road= penalty_car_road
+        self.penalty_late= penalty_late
+        self.penalty_volumn=penalty_volumn
+        self.penalty_weight= penalty_weight
+        self.cost_per_car=cost_per_car
+        self.cost_per_km=cost_per_km
+
         
     def mutation(self,chromosome,prob):
 
@@ -112,9 +163,17 @@ class Modele_genetic():
                 return -1
         return trip_distance
 
-    def fitness(self,chromosome,cost_per_car=80,cost_per_km=5):# Calculate the fitness of a chromosome, here the fitness is determined by the reciprocal of cost
+    def fitness(self,chromosome):# Calculate the fitness of a chromosome, here the fitness is determined by the reciprocal of cost
+        penalty_wrong_chromosome=self.penalty_wrong_chromosome
+        penalty_car_road=self.penalty_car_road
+        penalty_late=self.penalty_late
+        penalty_volumn=self.penalty_volumn
+        penalty_weight=self.penalty_weight
+        cost_per_car=self.cost_per_car
+        cost_per_km=self.cost_per_km
+
         if chromosome[0]!=0 or chromosome[-1]!=0:
-            return -100000 
+            return -penalty_wrong_chromosome 
 
         penalty=0
         #ROUTE ONE, CAR ONE
@@ -130,14 +189,14 @@ class Modele_genetic():
                             vehicle_common.remove(vehicle)
                     # vehicle_common=[i for i in vehicle_common if i in constraints[constraints['SDVRP_CONSTRAINT_CUSTOMER_CODE']==chromosome[i]]['SDVRP_CONSTRAINT_VEHICLE_CODE'].tolist()]
                     if len(vehicle_common)<1:
-                        penalty+=10
+                        penalty+=penalty_car_road
                         
             else:
                 try:
                     vehicle_employe.append(vehicle_common[0])            
                     vehicle_dispo.remove(vehicle_common[0])
                 except:
-                    penalty+=10
+                    penalty+=penalty_car_road
 
         #TIME WINDOWS:penalty 
         i=1
@@ -148,7 +207,7 @@ class Modele_genetic():
                 if time_now>customers[customers['CUSTOMER_CODE']==chromosome[i]]['CUSTOMER_TIME_WINDOW_FROM_MIN'].to_list()[0] and time_now+customers[customers['CUSTOMER_CODE']==chromosome[i]]['CUSTOMER_DELIVERY_SERVICE_TIME_MIN'].to_list()[0]<customers[customers['CUSTOMER_CODE']==chromosome[i]]['CUSTOMER_TIME_WINDOW_TO_MIN'].to_list()[0]:
                     pass
                 else:
-                    penalty+=10
+                    penalty+=penalty_late
                 time_now+=customers[customers['CUSTOMER_CODE']==chromosome[i]]['CUSTOMER_DELIVERY_SERVICE_TIME_MIN'].to_list()[0]
                 i+=1
             i+=1
@@ -163,15 +222,15 @@ class Modele_genetic():
                 cap_weight-=customers[customers['CUSTOMER_CODE']==chromosome[i]]['TOTAL_WEIGHT_KG'].to_list()[0]
 
                 if cap_volumn<0:
-                    penalty+=1
+                    penalty+=penalty_volumn
                 if cap_weight<0:
-                    penalty+=1
+                    penalty+=penalty_weight
                
                 i+=1
             i+=1
 
-        cost=cost_per_car*(chromosome.count(0)-1)+cost_per_km*self.TripDistance(chromosome)
-        fitness=-cost-penalty
+        cost_trip=cost_per_car*(chromosome.count(0)-1)+cost_per_km*self.TripDistance(chromosome)
+        fitness=-cost_trip-penalty
         return fitness
 
 class VRP_GA():
@@ -185,6 +244,7 @@ class VRP_GA():
         self.num_pop=num_pop
         self.chromosome_modele = chromosome_modele
         self.vrp = vrp
+        self.best_solution=[]
 
     def verification(self,chromosome):
         if chromosome :
@@ -208,15 +268,15 @@ class VRP_GA():
 
     def initialize_population(self,num_pop,chromosome_modele):
 
-        return [self.generate_chromosome(chromosome_modele) for _ in range(num_pop)]
+        self.population =[self.generate_chromosome(chromosome_modele) for _ in range(num_pop)]
     
-    def evolution(self,modele_genetic,num_parent,population,rate_mutation,num_pop,chromosome_modele): # Realize a generation, including the mating, the mutation, the elimination and the regeneration
+    def evolution(self): # Realize a generation, including the mating, the mutation, the elimination and the regeneration
 
         def binary_tournement(modele_genetic,population,num_parent):# Select certain individuals as parents by their fitness
             parents=[]            
             for i in range(num_parent):
                 candidate=random.sample(population,2)
-                # print(len(candidate),len(candidate[0]),len(candidate[1]))
+
                 if modele_genetic.fitness(candidate[0])> modele_genetic.fitness(candidate[1]):
                     parents.append(candidate[0])
                 else:
@@ -233,7 +293,6 @@ class VRP_GA():
         def pop_mutation(modele_genetic,population,rate_mutation):# Realize mutation for all members in the population
             for i in population:
                 i=modele_genetic.mutation(i,rate_mutation)
-            # print('mutated')
             return population
         
         def eliminate(modele_genetic,population): # Eliminate the less strong half of the population
@@ -241,32 +300,35 @@ class VRP_GA():
             for chromosome in population:
                 list_fitness.append(modele_genetic.fitness(chromosome))
             critere=statistics.median(list_fitness)
+            best_performance=max(list_fitness)
+            for i in population:
+                if modele_genetic.fitness(i)==best_performance:
+                    best_solution=i
             for i in population:
                 if modele_genetic.fitness(i)<critere:
                     population.remove(i)
-            return population
+            return population, best_solution
 
-        def regeneration(self,population,num_pop,chromosome_modele): # Generate new-borns to maintain the number of population remains stable
-            curr_population=len(population)
-            if num_pop>curr_population:
-                for i in range(num_pop-curr_population):
-                    population.append(self.generate_chromosome(chromosome_modele))
+        def regeneration(self): # Generate new-borns to maintain the number of population remains stable
+            curr_population=len(self.population)
+            if self.num_pop>curr_population:
+                for i in range(self.num_pop-curr_population):
+                    self.population.append(self.generate_chromosome(self.chromosome_modele))
             else:
                 list_fitness=[]
-                for chromosome in population:
-                    list_fitness.append(modele_genetic.fitness(chromosome))
+                for chromosome in self.population:
+                    list_fitness.append(self.modele_genetic.fitness(chromosome))
                 critere=sorted(list_fitness,reverse=True)[9]
-                for i in population:
-                    if modele_genetic.fitness(i)<critere:
-                        population.remove(i)
-            return population
+                for i in self.population:
+                    if self.modele_genetic.fitness(i)<critere:
+                        self.population.remove(i)
+            return self.population
 
-        parents=binary_tournement(modele_genetic,population,num_parent)
-        population=pop_crossover(modele_genetic,parents,population)
-        population=pop_mutation(modele_genetic,population,rate_mutation)
-        population=eliminate(modele_genetic,population)
-        population=regeneration(self,population,num_pop,chromosome_modele)
-        return population
+        parents=binary_tournement(self.modele_genetic,self.population,self.num_parent)
+        self.population=pop_crossover(self.modele_genetic,parents,self.population)
+        self.population=pop_mutation(self.modele_genetic,self.population,self.rate_mutation)
+        self.population,self.best_solution=eliminate(self.modele_genetic,self.population)
+        self.population=regeneration(self)
 
 
 
@@ -346,35 +408,3 @@ def cost(vrp,sol,omega=1000):
     print('Solution:', sol_list)
     print('Total cost of solution:', total_cost)
     return total_cost
-                    
-
-
-
-                    
-
-                    
-
-                    
-
-
-                    
-
-
-                    
-
-
-
-
-                                
-
-
-                    
-                    
-                    
-
-                    
-
-
-
-
-
