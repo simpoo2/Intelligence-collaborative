@@ -178,26 +178,9 @@ class Modele_genetic():
         penalty=0
         #ROUTE ONE, CAR ONE
         vehicle_dispo=['J92-T-826','A69-O-649','875-M-523','O76-T-703','O76-T-702','A08-J-522','O78-K-074','T14-E-264','E81-M-661']
-        vehicle_employe=[]
-        for i in range(len(chromosome)):
-            if chromosome[i]!=0 :
-                if chromosome[i-1]==0:
-                    vehicle_common=constraints[constraints['SDVRP_CONSTRAINT_CUSTOMER_CODE']==chromosome[1+i]]['SDVRP_CONSTRAINT_VEHICLE_CODE'].to_list()
-                else:
-                    for vehicle in vehicle_common:
-                        if vehicle not in constraints[constraints['SDVRP_CONSTRAINT_CUSTOMER_CODE']==chromosome[i]]['SDVRP_CONSTRAINT_VEHICLE_CODE'].to_list():
-                            vehicle_common.remove(vehicle)
-                    # vehicle_common=[i for i in vehicle_common if i in constraints[constraints['SDVRP_CONSTRAINT_CUSTOMER_CODE']==chromosome[i]]['SDVRP_CONSTRAINT_VEHICLE_CODE'].tolist()]
-                    if len(vehicle_common)<1:
-                        penalty+=penalty_car_road
-                        
-            else:
-                try:
-                    vehicle_employe.append(vehicle_common[0])            
-                    vehicle_dispo.remove(vehicle_common[0])
-                except:
-                    penalty+=penalty_car_road
-
+        num_vehicle=chromosome.count(0)-1
+        # vehicle_employe=['875-M-523' for i in range(num_vehicle)]             
+        vehicle_employe=vehicle_dispo[:num_vehicle]
         #TIME WINDOWS:penalty 
         i=1
         for car in vehicle_employe:
@@ -225,7 +208,6 @@ class Modele_genetic():
                     penalty+=penalty_volumn
                 if cap_weight<0:
                     penalty+=penalty_weight
-               
                 i+=1
             i+=1
 
